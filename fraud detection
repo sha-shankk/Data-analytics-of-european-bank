@@ -1,0 +1,93 @@
+# Importing necessary libraries
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_curve, roc_auc_score
+from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Load dataset (Replace 'data.csv' with your dataset file)
+data = pd.read_csv('data.csv')
+
+# Data preprocessing
+# Remove any unnecessary columns
+# Handle missing values (e.g., imputation)
+# Encode categorical variables (if any)
+# Feature scaling if needed
+
+# Assuming 'fraud' column is the target variable
+X = data.drop('fraud', axis=1)
+y = data['fraud']
+
+# Splitting data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Handling class imbalance using SMOTE (Synthetic Minority Over-sampling Technique)
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+# Initialize Random Forest classifier
+clf = RandomForestClassifier(random_state=42)
+
+# Hyperparameter tuning using Grid Search
+param_grid = {
+    'classifier__n_estimators': [50, 100, 200],
+    'classifier__max_depth': [None, 5, 10],
+    'classifier__min_samples_split': [2, 5, 10]
+}
+
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),  # Feature scaling
+    ('classifier', clf)            # Random Forest classifier
+])
+
+grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring='accuracy')
+grid_search.fit(X_train_resampled, y_train_resampled)
+
+# Best parameters
+print("Best Parameters:", grid_search.best_params_)
+
+# Extracting the best model
+best_model = grid_search.best_estimator_
+
+# Making predictions on the testing set
+y_pred = best_model.predict(X_test)
+
+# Evaluating model performance
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+
+# Confusion matrix
+conf_matrix = confusion_matrix(y_test, y_pred)
+print("Confusion Matrix:\n", conf_matrix)
+
+# Classification report
+class_report = classification_report(y_test, y_pred)
+print("Classification Report:\n", class_report)
+
+# Plotting ROC curve
+y_pred_prob = best_model.predict_proba(X_test)[:, 1]
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='blue', label='ROC Curve')
+plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend()
+plt.show()
+
+# Area under ROC curve
+auc_score = roc_auc_score(y_test, y_pred_prob)
+print("AUC Score:", auc_score)
+
+# Feature Importance analysis
+feature_importances = best_model.named_steps['classifier'].feature_importances_
+feature_names = X.columns
+sorted_indices = np.argsort(feature_importances)[::-1]
+print("\nFeature Importances:")
+for index in sorted_indices:
+    print(f"{feature_names[index]}: {feature_importances[index]}")
